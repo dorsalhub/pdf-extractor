@@ -1,0 +1,11 @@
+model_class = "PdfExtractor"
+schema_id = "open/document-extraction"
+
+[[dependencies]]
+type = "media_type"
+include = ["application/pdf"]
+
+[options]
+strict = false
+use_ocr = false
+ocr_language = "eng"
