@@ -7,7 +7,7 @@ Fast, deterministic PDF extraction using [`pdfium`](https://pdfium.googlesource.
 * **Native Extraction:** Extracts text and precise spatial coordinates (bounding boxes) directly from the PDF document.
 * **Tesseract OCR Fallback:** Built-in optical character recognition (OCR) fallback for scanned or empty pages (requires `pytesseract`)
 * **Schema Compliant:** Outputs standardized JSON matching the `open/document-extraction` schema.
-* **Interactive HTML Export:** Outputs can be exported to interactive HTML wireframes via the Dorsal CLI (requires `dorsalhub-adapters`).
+* **Interactive HTML Export:** Outputs can be exported to interactive HTML wireframes via the Dorsal CLI.
 
 
 ## Quick Start
