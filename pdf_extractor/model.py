@@ -39,52 +39,9 @@ class PdfExtractor(AnnotationModel):
         global_widths: dict[int | float, list[int]], 
         global_heights: dict[int | float, list[int]]
     ) -> dict[str, Any]:
-        """
-        Dorsal model for deterministic PDF text and layout extraction.
-
-        Extracts text and spatial coordinates (bounding boxes) using pdfium, with optional Tesseract OCR fallback for scanned pages.
-        Chunks massive documents into safe, schema-compliant `open/document-extraction`-valid records.
-
-        """
-        pages_in_chunk = set()
-        has_boxes = False
-        has_text = False
-
-        for b in blocks:
-            page_num = b.get("page_number")
-            if page_num is not None:
-                pages_in_chunk.add(page_num)
-                
-            b_type = b.get("block_type")
-            if b_type == "box":
-                has_boxes = True
-            elif b_type == "text":
-                has_text = True
-
-        start_page = min(pages_in_chunk) if pages_in_chunk else None
-        end_page = max(pages_in_chunk) if pages_in_chunk else None
-
-        chunk_widths = {}
-        chunk_heights = {}
-        
-        if not blocks:
-            chunk_widths = global_widths
-            chunk_heights = global_heights
-            
-            all_pages = [p for p_list in global_widths.values() for p in p_list]
-            if all_pages:
-                start_page = min(all_pages)
-                end_page = max(all_pages)
-        elif start_page is not None:
-            for w_val, p_list in global_widths.items():
-                intersect = [p for p in p_list if p in pages_in_chunk]
-                if intersect:
-                    chunk_widths[w_val] = intersect
-
-            for h_val, p_list in global_heights.items():
-                intersect = [p for p in p_list if p in pages_in_chunk]
-                if intersect:
-                    chunk_heights[h_val] = intersect
+        """Assembles the extracted blocks and dimensions into the final schema-valid dictionary."""
+        has_boxes = any(b.get("block_type") == "box" for b in blocks)
+        has_text = any(b.get("block_type") == "text" for b in blocks)
 
         if has_boxes and has_text:
             extraction_type = "mixed"
@@ -101,23 +58,24 @@ class PdfExtractor(AnnotationModel):
             "blocks": blocks,
         }
         
-        if start_page is not None and end_page is not None:
-            record["attributes"] = {
-                "chunk_type": "page_range",
-                "start_page": start_page,
-                "end_page": end_page
-            }
-
         if extraction_type in ["boxes", "polygons", "mixed"]:
             record["unit"] = "per_mille"
 
-        page_width = self._format_dimension(chunk_widths)
+        page_width = self._format_dimension(global_widths)
         if page_width is not None:
             record["page_width"] = page_width
 
-        page_height = self._format_dimension(chunk_heights)
+        page_height = self._format_dimension(global_heights)
         if page_height is not None:
             record["page_height"] = page_height
+
+        all_pages = [p for p_list in global_widths.values() for p in p_list]
+        if all_pages:
+            record["attributes"] = {
+                "chunk_type": "page_range",
+                "start_page": min(all_pages),
+                "end_page": max(all_pages)
+            }
 
         return record
 
@@ -126,25 +84,21 @@ class PdfExtractor(AnnotationModel):
         password: str | None = None, 
         strict: bool = False, 
         use_ocr: bool = False, 
-        ocr_language: str = "eng",
-        max_blocks_per_record: int | None = 100_000
-    ) -> list[dict[str, Any]] | None:
+        ocr_language: str = "eng"
+    ) -> dict[str, Any] | None:
         """
+        Dorsal model for deterministic PDF text and layout extraction.
+
         Args:
-            password (str | None): Optional password for decrypting secured PDFs. Defaults to None.
-            strict (bool): If True, enforces strict parsing and raises exceptions on malformed PDF streams. 
-                Defaults to False.
+            password (str | None): Optional password for decrypting secured PDFs.
+            strict (bool): If True, enforces strict parsing and raises exceptions on malformed streams. 
             use_ocr (bool): If True, runs a fallback OCR engine on pages lacking extractable text. 
-                Defaults to False.
-            ocr_language (str): The Tesseract/OCR language code (e.g., 'eng') to use for fallback extraction. 
-                Defaults to "eng".
-            max_blocks_per_record (int | None): The maximum number of geometric blocks permitted per output record. 
-                Note: this matches the `open/document-extraction` limit; increasing this value will permit non-schema-valid payloads.
+            ocr_language (str): The Tesseract/OCR language code (e.g., 'eng').
 
         Returns:
-            list[dict[str, Any]] | None: A list of schema-valid `document-extraction` dictionaries. 
-                Each dictionary represents a contiguous chunk of the document. Returns `None` if the 
-                foundational PDF extraction catastrophically fails.
+            dict[str, Any] | None: A single schema-valid `document-extraction` dictionary 
+                representing the entire document. The framework will automatically chunk it 
+                if it breaches schema limits.
         """
         try:
             pages = extract_pdf_layout_per_mille(
@@ -170,11 +124,22 @@ class PdfExtractor(AnnotationModel):
                 continue
 
             for token in page.tokens:
+                clean_text = token.text.strip()
+
+                if len(clean_text) > 4096:
+                    self.log_debug(
+                        "Truncating text in block on page %s (length %d > 4096 limit). Begins: %s", 
+                        page.page_number, 
+                        len(clean_text),
+                        text:[50]
+                    )
+                    clean_text = clean_text[:4096]
+
                 x0, y0, x1, y1 = token.box
                 all_blocks.append({
                     "id": str(uuid.uuid4()),
                     "block_type": "box",
-                    "text": token.text.strip()[:4096],
+                    "text": clean_text,
                     "page_number": page.page_number,
                     "box": {
                         "x": x0, 
@@ -185,7 +150,7 @@ class PdfExtractor(AnnotationModel):
                 })
 
         if use_ocr and empty_pages:
-            logger.info(f"Running fallback OCR on {len(empty_pages)} empty pages...")
+            self.log_debug("Running fallback OCR on %d empty pages...", len(empty_pages))
             try:
                 ocr_results = ocr_extract_pdf_text(
                     self.file_path, 
@@ -198,31 +163,24 @@ class PdfExtractor(AnnotationModel):
                     if ocr_index < len(ocr_results):
                         text = ocr_results[ocr_index].strip()
                         if text:
+                            if len(text) > 4096:
+                                self.log_debug(
+                                    "Truncating OCR text on page %s (length %d > 4096 limit). Begins: %s", 
+                                    page_num, 
+                                    len(text),
+                                    text:[50]
+                                )
+                                text = text[:4096]
+
                             all_blocks.append({
                                 "id": str(uuid.uuid4()),
                                 "block_type": "text",  
-                                "text": text[:4096],
+                                "text": text,
                                 "page_number": page_num
                             })
             except Exception as e:
-                logger.warning(f"Fallback OCR failed: {e}")
+                self.log_warning("Fallback OCR failed: %s", e)
 
         all_blocks.sort(key=lambda x: x.get("page_number", 0))
 
-        if not all_blocks:
-            return [self._build_record([], global_page_widths_map, global_page_heights_map)]
-
-        if max_blocks_per_record is None or max_blocks_per_record <= 0:
-            return [self._build_record(all_blocks, global_page_widths_map, global_page_heights_map)]
-
-        results = []
-        for i in range(0, len(all_blocks), max_blocks_per_record):
-            chunk_slice = all_blocks[i : i + max_blocks_per_record]
-            record = self._build_record(
-                blocks=chunk_slice,
-                global_widths=global_page_widths_map,
-                global_heights=global_page_heights_map
-            )
-            results.append(record)
-
-        return results
+        return self._build_record(all_blocks, global_page_widths_map, global_page_heights_map)
