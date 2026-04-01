@@ -19,7 +19,7 @@ import tomllib
 import pytest
 from dorsal.testing import run_model
 
-from pdf_extractor.model import PdfExtractor
+from dorsal_pdf_extractor.model import PdfExtractor
 
 class MockToken:
     def __init__(self, text, box):
@@ -93,8 +93,8 @@ def test_corrupted_pdf_extraction(tmp_path):
     assert "PDF extraction failed" in result.error
 
 
-@patch('pdf_extractor.model.extract_pdf_layout_per_mille')
-@patch('pdf_extractor.model.ocr_extract_pdf_text')
+@patch('dorsal_pdf_extractor.model.extract_pdf_layout_per_mille')
+@patch('dorsal_pdf_extractor.model.ocr_extract_pdf_text')
 def test_ocr_and_variable_dimensions(mock_ocr, mock_layout, tmp_path):
     """
     Hits: 
@@ -132,8 +132,8 @@ def test_ocr_and_variable_dimensions(mock_ocr, mock_layout, tmp_path):
     assert record["blocks"][1]["text"] == "OCR text from scanned page"
 
 
-@patch('pdf_extractor.model.extract_pdf_layout_per_mille')
-@patch('pdf_extractor.model.ocr_extract_pdf_text')
+@patch('dorsal_pdf_extractor.model.extract_pdf_layout_per_mille')
+@patch('dorsal_pdf_extractor.model.ocr_extract_pdf_text')
 def test_pure_ocr_extraction(mock_ocr, mock_layout, tmp_path):
     """Hits `elif has_text: extraction_type = "text"`"""
     dummy_pdf = tmp_path / "dummy.pdf"
@@ -154,8 +154,8 @@ def test_pure_ocr_extraction(mock_ocr, mock_layout, tmp_path):
     assert result.record["extraction_type"] == "text"
 
 
-@patch('pdf_extractor.model.extract_pdf_layout_per_mille')
-@patch('pdf_extractor.model.ocr_extract_pdf_text')
+@patch('dorsal_pdf_extractor.model.extract_pdf_layout_per_mille')
+@patch('dorsal_pdf_extractor.model.ocr_extract_pdf_text')
 def test_ocr_failure_logging(mock_ocr, mock_layout, tmp_path):
     """Hits `except Exception as e: logger.warning(f"Fallback OCR failed: {e}")`"""
     dummy_pdf = tmp_path / "dummy.pdf"
@@ -179,7 +179,7 @@ def test_ocr_failure_logging(mock_ocr, mock_layout, tmp_path):
     assert len(result.record["blocks"]) == 0
 
 
-@patch('pdf_extractor.model.extract_pdf_layout_per_mille')
+@patch('dorsal_pdf_extractor.model.extract_pdf_layout_per_mille')
 def test_empty_document(mock_layout, tmp_path):
     """
     Hits:
