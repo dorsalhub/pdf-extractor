@@ -23,10 +23,10 @@ dev = [
 ]
 
 [project.entry-points."dorsal.models"]
-pdf_extractor = "pdf_extractor"
+pdf_extractor = "dorsal_pdf_extractor"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pdf_extractor"]
+packages = ["dorsal_pdf_extractor"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "model_config.toml" = "pdf_extractor/model_config.toml"
