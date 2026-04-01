@@ -131,7 +131,7 @@ class PdfExtractor(AnnotationModel):
                         "Truncating text in block on page %s (length %d > 4096 limit). Begins: %s", 
                         page.page_number, 
                         len(clean_text),
-                        text[:50]
+                        clean_text[:50]
                     )
                     clean_text = clean_text[:4096]
 
