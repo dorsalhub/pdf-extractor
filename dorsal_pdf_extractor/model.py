@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import uuid
 import logging
 from typing import Any
@@ -21,9 +22,13 @@ from dorsal.file.preprocessing.pdf import extract_pdf_layout_per_mille, ocr_extr
 
 logger = logging.getLogger(__name__)
 
+
+
 class PdfExtractor(AnnotationModel):
     id = "github:dorsalhub/pdf-extractor"
     version = version("dorsal-pdf-extractor")
+
+    _RX_CONTROL_CHARS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+')
 
     def _format_dimension(self, dim_map: dict[int | float, list[int]]) -> Any:
         """Formats page width/height maps into the schema's expected structure."""
@@ -124,7 +129,10 @@ class PdfExtractor(AnnotationModel):
                 continue
 
             for token in page.tokens:
-                clean_text = token.text.strip()
+                clean_text = self._RX_CONTROL_CHARS.sub('', token.text).strip()
+
+                if not clean_text:
+                    continue
 
                 if len(clean_text) > 4096:
                     self.log_debug(

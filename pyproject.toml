@@ -4,13 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dorsal-pdf-extractor"
-version = "0.4.0"
+version = "0.5.0"
 description = "Dorsal model: PDF Extractor"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "dorsalhub>=0.8.3",
-    "pytest>=9.0.2",
+    "dorsalhub>=0.10.2"
 ]
 
 [dependency-groups]
@@ -19,7 +18,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
-    "dorsalhub-adapters>=0.2.0"
+    "dorsalhub-adapters>=0.4.2"
 ]
 
 [project.entry-points."dorsal.models"]

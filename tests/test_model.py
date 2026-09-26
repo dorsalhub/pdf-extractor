@@ -43,7 +43,7 @@ def test_model_integration():
     """Tests the PDF Extractor model running inside the Dorsal harness."""
     pdf_file = TEST_ASSETS / "invoice_demo.pdf"
 
-    result = run_model(
+    results = run_model(
         annotation_model=PdfExtractor,
         file_path=str(pdf_file),
         schema_id=config["schema_id"],
@@ -51,6 +51,8 @@ def test_model_integration():
         dependencies=config.get("dependencies"),
         options=config.get("options"),
     )
+
+    result = results[0]
 
     # Basic execution assertions
     assert result.error is None, f"Model execution failed: {result.error}"
@@ -81,13 +83,15 @@ def test_corrupted_pdf_extraction(tmp_path):
     bad_pdf = tmp_path / "bad.pdf"
     bad_pdf.write_text("This is a text file pretending to be a PDF.")
 
-    result = run_model(
+    results = run_model(
         annotation_model=PdfExtractor,
         file_path=str(bad_pdf),
         schema_id=config["schema_id"],
         validation_model=config.get("validation_model"),
         options=config.get("options")
     )
+
+    result = results[0]
 
     assert result.error is not None
     assert "PDF extraction failed" in result.error
@@ -117,12 +121,14 @@ def test_ocr_and_variable_dimensions(mock_ocr, mock_layout, tmp_path):
     test_options = config.get("options", {}).copy()
     test_options["use_ocr"] = True
 
-    result = run_model(
+    results = run_model(
         annotation_model=PdfExtractor,
         file_path=str(dummy_pdf),
         schema_id=config["schema_id"],
         options=test_options
     )
+
+    result = results[0]
 
     record = result.record
     assert record["extraction_type"] == "mixed"
@@ -144,12 +150,14 @@ def test_pure_ocr_extraction(mock_ocr, mock_layout, tmp_path):
 
     test_options = {"use_ocr": True}
 
-    result = run_model(
+    results = run_model(
         annotation_model=PdfExtractor,
         file_path=str(dummy_pdf),
         schema_id=config["schema_id"],
         options=test_options
     )
+
+    result = results[0]
 
     assert result.record["extraction_type"] == "text"
 
@@ -166,12 +174,14 @@ def test_ocr_failure_logging(mock_ocr, mock_layout, tmp_path):
 
     test_options = {"use_ocr": True}
 
-    result = run_model(
+    results = run_model(
         annotation_model=PdfExtractor,
         file_path=str(dummy_pdf),
         schema_id=config["schema_id"],
         options=test_options
     )
+
+    result = results[0]
 
     # Extraction succeeds, but falls back to empty boxes due to OCR crash
     assert result.error is None
@@ -192,11 +202,13 @@ def test_empty_document(mock_layout, tmp_path):
     # Simulate a PDF with 0 pages
     mock_layout.return_value = []
 
-    result = run_model(
+    results = run_model(
         annotation_model=PdfExtractor,
         file_path=str(dummy_pdf),
         schema_id=config["schema_id"]
     )
+
+    result = results[0]
 
     assert result.record["extraction_type"] == "boxes"
     assert "page_width" not in result.record
