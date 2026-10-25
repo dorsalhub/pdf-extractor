@@ -1,5 +1,6 @@
 model_class = "PdfExtractor"
 schema_id = "open/document-extraction"
+schema_version = "0.8.0"
 
 [[dependencies]]
 type = "media_type"

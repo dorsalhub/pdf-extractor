@@ -4,13 +4,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dorsal-pdf-extractor"
-version = "0.5.0"
+version = "0.6.0"
 description = "Dorsal model: PDF Extractor"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
-    "dorsalhub>=0.10.2"
+    "dorsalhub>=0.12.1,<0.13"
 ]
+
+[project.optional-dependencies]
+ocr = [
+    "pytesseract>=0.3.13"
+]
+
+[project.urls]
+Repository = "https://github.com/dorsalhub/pdf-extractor"
 
 [dependency-groups]
 dev = [
@@ -18,7 +27,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
-    "dorsalhub-adapters>=0.4.2"
+    "oatschema[validate]>=0.8.0.1,<0.9"
 ]
 
 [project.entry-points."dorsal.models"]
@@ -29,3 +38,20 @@ packages = ["dorsal_pdf_extractor"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "model_config.toml" = "dorsal_pdf_extractor/model_config.toml"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["dorsal_pdf_extractor", "tests"]
+strict = true
+untyped_calls_exclude = ["dorsal"]
+
+[[tool.mypy.overrides]]
+module = ["pypdfium2", "pypdfium2.*"]
+ignore_missing_imports = true

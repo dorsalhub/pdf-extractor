@@ -15,3 +15,16 @@ venv.bak/
 
 # Dorsal
 dorsal.toml
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Tooling
+.mypy_cache/
+.ruff_cache/
+
+# Agents
+CLAUDE.md
+.claude/
