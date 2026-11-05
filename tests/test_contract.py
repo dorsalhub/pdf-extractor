@@ -16,15 +16,24 @@
 
 import hashlib
 import importlib.util
+import json
+import logging
 import pathlib
+import re
 import shutil
 import tomllib
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import dorsal
 import oatschema
 import pytest
+from dorsal.api.model import run_or_install_model
+from dorsal.file.configs.model_runner import ModelRunnerPipelineStep
+from dorsal.file.model_runner import ModelRunner
+from dorsal.file.schemas import normalize_schema_id
 from dorsal.testing import run_model
+from packaging.requirements import Requirement
 from pdf_factory import A4, A5_LANDSCAPE, LETTER, Page, build_pdf
 
 from dorsal_pdf_extractor.model import PdfExtractor
@@ -35,8 +44,13 @@ ASSETS = pathlib.Path(__file__).parent / "assets"
 with open(ROOT / "model_config.toml", "rb") as f:
     CONFIG: dict[str, Any] = tomllib.load(f)
 
+with open(ROOT / "pyproject.toml", "rb") as f:
+    PYPROJECT: dict[str, Any] = tomllib.load(f)
+
 SCHEMA_NAME = CONFIG["schema_id"].removeprefix("open/")
 SCHEMA_VERSION = CONFIG["schema_version"]
+HUB_SCHEMA_ID_PATTERN = re.compile(r"^[a-z0-9-]+/[a-z0-9-]+$")
+BASELINE: dict[str, list[dict[str, Any]]] = json.loads((ASSETS / "records_0.6.0.json").read_text(encoding="utf-8"))
 
 GENERATED: dict[str, list[Page]] = {
     "two_lines": [Page(A4, [(72, 770, "The quick brown fox"), (72, 740, "Total (EUR): 100")])],
@@ -68,7 +82,7 @@ def _run(path: pathlib.Path, options: dict[str, Any] | None = None, *, check_med
     return run_model(
         annotation_model=PdfExtractor,
         file_path=str(path),
-        schema_id=CONFIG["schema_id"],
+        schema_id=SCHEMA_NAME,
         schema_version=SCHEMA_VERSION,
         dependencies=CONFIG.get("dependencies") if check_media_type else None,
         options={**CONFIG["options"], **(options or {})},
@@ -123,6 +137,80 @@ def test_block_ids_follow_the_documented_scheme(case: str, tmp_path: pathlib.Pat
 def test_two_runs_give_the_same_record(case: str, tmp_path: pathlib.Path) -> None:
     path = _pdf_path(case, tmp_path)
     assert _records(_run(path)) == _records(_run(path))
+
+
+def _without_producer(records: list[dict[str, Any]]) -> str:
+    return json.dumps([{**r, "producer": None} for r in records], sort_keys=True)
+
+
+def test_baseline_covers_every_case() -> None:
+    assert set(BASELINE) == set(CASES)
+
+
+@pytest.mark.parametrize("case", CASES)
+def test_records_match_0_6_0(case: str, tmp_path: pathlib.Path) -> None:
+    """Compares each record with the one saved from the published 0.6.0 on Dorsal 0.12.1."""
+    results = _run(_pdf_path(case, tmp_path))
+    records = _records(results)
+    expected = BASELINE[case]
+    assert [r["producer"] for r in records] == [f"pdf-extractor-v{PYPROJECT['project']['version']}"] * len(expected)
+    assert _without_producer(records) == _without_producer(expected)
+    for result in results:
+        assert result.source.id == "github:dorsalhub/pdf-extractor"
+        assert result.source.version == PYPROJECT["project"]["version"]
+
+
+def test_dorsal_range_has_an_upper_bound() -> None:
+    requirements = [Requirement(r) for r in PYPROJECT["project"]["dependencies"]]
+    specifier = next(r.specifier for r in requirements if r.name == "dorsalhub")
+    assert specifier.contains("0.13.0")
+    assert specifier.contains(dorsal.__version__)
+    assert not specifier.contains("0.12.1")
+    assert not specifier.contains("0.14.0")
+
+
+def test_schema_id_is_accepted_by_the_hub_and_by_dorsal() -> None:
+    assert HUB_SCHEMA_ID_PATTERN.match(CONFIG["schema_id"])
+    assert normalize_schema_id(CONFIG["schema_id"]) == "open/document-extraction"
+
+
+def test_pipeline_step_gives_no_warning(caplog: pytest.LogCaptureFixture) -> None:
+    """Checks that the model's config dumps to the bare name, which Dorsal runs in a pipeline without warning."""
+    step = ModelRunnerPipelineStep.model_validate(
+        {
+            "annotation_model": ["dorsal_pdf_extractor.model", "PdfExtractor"],
+            "schema_id": CONFIG["schema_id"],
+            "schema_version": SCHEMA_VERSION,
+            "dependencies": CONFIG["dependencies"],
+            "options": CONFIG["options"],
+        }
+    )
+    dumped = step.model_dump(mode="json", exclude_none=True)
+    assert dumped["schema_id"] == "document-extraction"
+
+    with caplog.at_level(logging.WARNING, logger="dorsal"):
+        record = ModelRunner(pipeline_config=[dumped]).run(str(ASSETS / "invoice_demo.pdf"))
+
+    assert record.annotations is not None
+    assert [r.getMessage() for r in caplog.records if "deprecated" in r.getMessage()] == []
+
+
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+def test_dorsal_run_path_gives_no_warning(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Runs the model the way `dorsal run` does, with the schema id from `model_config.toml`."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    with (
+        patch("dorsal.api.model._load_package_config", return_value=CONFIG),
+        caplog.at_level(logging.WARNING, logger="dorsal"),
+    ):
+        results = run_or_install_model("dorsal-pdf-extractor", str(ASSETS / "invoice_demo.pdf"))
+
+    assert _records(results)[0]["blocks"]
+    assert [r.getMessage() for r in caplog.records if "deprecated" in r.getMessage()] == []
 
 
 def test_repeated_text_gets_numbered_ids(tmp_path: pathlib.Path) -> None:

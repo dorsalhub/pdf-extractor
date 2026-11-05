@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 (2026-11-05)
+
+### Changed
+
+- **Requires `dorsalhub>=0.13.0,<0.14`.** Earlier Dorsal versions are no longer supported. The model uses Dorsal's internal PDF functions, so the range has an upper bound.
+- Records are the same as 0.6.0's, block ids included, apart from the version in `producer` and in the annotation's `source`. A new test compares them with records saved from 0.6.0 on Dorsal 0.12.1.
+
+### Notes
+
+- `model_config.toml` keeps `schema_id = "open/document-extraction"`, because DorsalHub's model registry doesn't accept a bare name yet. Dorsal 0.13 deprecates that id, but `dorsal model install` and `dorsal run` print no warning. Use `document-extraction` when you give a schema id yourself.
+- Until DorsalHub's model registry lists this release, install it from PyPI. `dorsal model install dorsalhub/pdf-extractor` installs 0.6.0, and so does `dorsal run dorsalhub/pdf-extractor` if the model isn't installed yet. That replaces Dorsal 0.13 with Dorsal 0.12.1.
+
 ## 0.6.0 (2026-10-30)
 
 ### Changed
