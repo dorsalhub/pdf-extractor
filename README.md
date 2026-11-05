@@ -13,11 +13,14 @@ Fast, deterministic PDF extraction using [`pdfium`](https://pdfium.googlesource.
 
 ## Quick Start
 
-Run the model directly against a local PDF file:
+Install the model from PyPI, then run it against a local PDF file:
 
 ```bash
+pip install dorsal-pdf-extractor
 dorsal run dorsalhub/pdf-extractor ./document.pdf
 ```
+
+This release needs Dorsal 0.13 (`dorsalhub>=0.13.0,<0.14`). Install it from PyPI first, as shown. Until DorsalHub's model registry lists this release, `dorsal model install dorsalhub/pdf-extractor` installs 0.6.0, and so does `dorsal run dorsalhub/pdf-extractor` if the model isn't installed yet. That replaces Dorsal 0.13 with Dorsal 0.12.1, and `dorsal scan` can then fail on the `dorsal.toml` entry it leaves.
 
 ### Configuration Options
 
@@ -52,7 +55,7 @@ dorsal run dorsalhub/pdf-extractor ./document.pdf --export=html
 
 This model produces a file annotation conforming to the [OATS](https://oatschema.org) (Open Annotation Task Schemas) Document Extraction schema:
 
-* **Schema ID:** `open/document-extraction` (v0.8.0, pinned in `model_config.toml`)
+* **Schema ID:** `document-extraction` (v0.8.0, pinned in `model_config.toml`). On Dorsal 0.13, use this bare name wherever you give a schema id yourself, for example `dorsal adapter list document-extraction`. The older `open/document-extraction` still works, but Dorsal 0.13 deprecates it: `dorsal adapter` commands print a warning, and `run_model` raises a `DeprecationWarning`.
 * **Key Fields:**
   * `extraction_type`: The type of extraction: `boxes`, `text` (OCR only) or `mixed`.
   * `unit`: `per_mille`. Box coordinates run from 0 to 1000 across the page, from the top-left corner.
@@ -71,6 +74,12 @@ Each block's `id` is `p<page>-<hash>-<n>`, for example `p1-75690e15d48c-1`:
 The ids are unique within a record, including across the chunks Dorsal splits a large record into, and can be recomputed from the record alone. The same file, extracted with the same versions of this model, Dorsal, pypdfium2 and (for OCR) Tesseract, and the same options, always gives the same ids.
 
 A block's id changes when its page or text changes, or when a block with the same text is added or removed before it on the same page. A change to a block's box alone, or to other blocks' text, leaves it unchanged.
+
+### The schema ID in `model_config.toml`
+
+`model_config.toml` still says `open/document-extraction`, because DorsalHub's model registry doesn't accept a bare name yet. You won't see a deprecation warning from this: `dorsal model install` writes the bare name to `dorsal.toml`, and `dorsal run` prints no warning. A `dorsal.toml` written by an earlier Dorsal can still hold the old id, and `dorsal scan` then logs a warning. To stop it, change that `schema_id` to `document-extraction`.
+
+Dorsal's results still report the schema as `open/document-extraction` in their `schema_id` field.
 
 ## Development
 

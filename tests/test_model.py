@@ -47,7 +47,7 @@ def _run(file_path: pathlib.Path, options: dict[str, Any] | None = None, *, chec
     return run_model(
         annotation_model=PdfExtractor,
         file_path=str(file_path),
-        schema_id=config["schema_id"],
+        schema_id=config["schema_id"].removeprefix("open/"),
         schema_version=config["schema_version"],
         validation_model=config.get("validation_model"),
         dependencies=config.get("dependencies") if check_media_type else None,
